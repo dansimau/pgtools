@@ -22,21 +22,33 @@ _xlog_to_bytes()
 
 _get_xlog_loc()
 {
-	pgfunc="pg_last_xlog_replay_location"
+	local pgfunc
 
-	if [ "$1" == "--master" ]; then
+	if _in_recovery $1; then
+		pgfunc="pg_last_xlog_replay_location"
+	else
 		pgfunc="pg_current_xlog_location"
-		shift
 	fi
 
-	[ -n "$1" ] && psql_extra_opts="$psql_extra_opts -h $1"
-
-	xlog_loc=$(psql $psql_extra_opts -Atc "SELECT $pgfunc();")
+	xlog_loc=$(psql -h $1 -Atc "SELECT $pgfunc();")
 	if [ $? -gt 0 ]; then
 		echo "ERROR: Failed getting xlog location from node $1" >&2
 		return 1
 	fi
 	echo $xlog_loc
+}
+
+_in_recovery()
+{
+	recovery=$(psql -h $1 -Atc "SELECT pg_is_in_recovery();")
+	# If pg_is_in_recovery() returns false then we're a master
+	if [ "$recovery" == "f" ]; then
+		return 1
+	else
+		# Slave. or unable to detect
+		return 0
+	fi
+
 }
 
 if [ $# -lt 1 ]; then
@@ -47,33 +59,57 @@ fi
 if [ "$1" == "--master" ]; then
 	shift
 	master=$1
-	shift
+	if _in_recovery $master; then
+		echo "WARNING: Master specified ($master) is not a master:" >&2
+		master=""
+	fi
 else
-	master=""
+	# Try to automatically detect the master
+	for s in "$@"; do
+		if ! _in_recovery $s; then
+			if [ -n "$master" ]; then
+				echo "WARNING: There is more than one master. To get lag calculcation, specify a master with the --master switch" >&2
+				master=""
+				break
+			fi
+			master=$s
+		fi
+	done
 fi
 
-# Get master xlog location
-master_xlog_loc=$(_get_xlog_loc --master $master) || exit $?
+# Get master xlog location (if there is a master)
+if [ -n "$master" ]; then
+	master_xlog_loc=$(_get_xlog_loc $master) || exit $?
+fi
 
 echo
 echo "Replication status ($(date +%c))"
-echo "-------------------------------------------------"
-echo "Master  $master: $master_xlog_loc"
+echo "----------------------------------------------------"
 
-for slave in "$@"; do
+for s in "$@"; do
 
-	slave_xlog_loc=""
-	slave_bytes_lag=""
+	xlog_loc=""
+	bytes_lag=""
+	role=""
 
-	# Get slave xlog location
-	slave_xlog_loc=$(_get_xlog_loc $slave) || exit $?
+	# Get xlog location
+	xlog_loc=$(_get_xlog_loc $s) || exit $?
+
+	if _in_recovery $s; then
+		role="Slave  "
+	else
+		role="Master "
+	fi
+
+	echo -n "$role $s: $xlog_loc"
 
 	# Calculate number of bytes behind
-	slave_bytes_lag=$(($(_xlog_to_bytes $master_xlog_loc) - $(_xlog_to_bytes $slave_xlog_loc)))
+	if [ -n "$master" ] && [ "$s" != "$master" ]; then
+		bytes_lag=$(($(_xlog_to_bytes $master_xlog_loc) - $(_xlog_to_bytes $xlog_loc)))
+		echo -n " ($bytes_lag bytes lag)"
+	fi
 
-	# Print
-	echo "Slave   $slave: $slave_xlog_loc ($slave_bytes_lag bytes lag)"
-
+	echo 
 done
 
 echo
