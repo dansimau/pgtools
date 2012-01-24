@@ -1,10 +1,10 @@
-== pgclone.sh ==
+## pgclone.sh
 
-=== Description ===
+### Description
 
 Clones a new standby from the specified postgresql master.
 
-=== Usage ===
+### Usage
 
 	-bash-3.2$ /tmp/pgclone.sh 
 	
@@ -20,7 +20,7 @@ Clones a new standby from the specified postgresql master.
 	
 	-bash-3.2$
 
-=== Example ===
+### Example
 
 	-bash-3.2$ pgclone.sh pg01
 	
@@ -75,19 +75,19 @@ Use the `-f` switch to bypass summary and prompt. Note that the script does a si
 	[root@pg03 ~]# 
 
 
-== pglag.sh ==
+## pglag.sh
 
-=== Description ===
+### Description
 
 Shows the replication lag of standby nodes in a postgresql cluster.
 
-=== Usage ===
+### Usage
 
 	[sysadmin@DBLB001 ~]$ ./pglag.sh 
 	Usage: ./pglag.sh [--master <master host>] <slave host [...]>
 	[sysadmin@DBLB001 ~]$ 
 
-=== Example ===
+### Example
 
 Set env variables if needed:
 
