@@ -54,9 +54,6 @@ EOF
 	return $?
 }
 
-master=$1
-shift
-
 # Parse options
 for opt in "$@"; do
 
@@ -79,9 +76,18 @@ for opt in "$@"; do
 			force=yes
 			;;
 		*)
-			echo "WARNING: Unrecognised option: $switch" >&2
+			if [ -z "$master" ]; then
+				master=$switch
+			else
+				echo "WARNING: Unrecognised option: $switch" >&2
+			fi
 	esac
 done
+
+if [ -z "$master" ]; then
+	echo "ERROR: Master not specified. See $0 --help" >&2
+	exit 1
+fi
 
 #
 # Run a lot of checks here to be safe...
