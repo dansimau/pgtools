@@ -40,7 +40,18 @@ _get_xlog_loc()
 
 _in_recovery()
 {
-	recovery=$(psql -h $1 -Atc "SELECT pg_is_in_recovery();")
+	local recovery
+
+	# Retrieve previously cached value
+	recovery=$(eval echo \$$1_in_recovery)
+
+	if [ ! -n "$recovery" ]; then
+		recovery=$(psql -h $1 -Atc "SELECT pg_is_in_recovery();")
+
+		# Cache result
+		eval "$1_in_recovery=\"$recovery\""
+	fi
+
 	# If pg_is_in_recovery() returns false then we're a master
 	if [ "$recovery" == "f" ]; then
 		return 1
